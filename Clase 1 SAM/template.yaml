@@ -1,0 +1,101 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Test Stack to create Lambda and API Gateway
+Resources:
+  TestApi:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: TestApi
+  TestApiHelloWorldResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      ParentId:
+        Fn::GetAtt:
+        - TestApi
+        - RootResourceId
+      RestApiId:
+        Ref: TestApi
+      PathPart: hello
+  TestApiHelloWorldGetMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      HttpMethod: GET
+      ResourceId:
+        Ref: TestApiHelloWorldResource
+      RestApiId:
+        Ref: TestApi
+      MethodResponses:
+        - StatusCode: 200
+      AuthorizationType: NONE
+      Integration:
+        Credentials:
+          Fn::GetAtt:
+          - ApiGatewayIamRole
+          - Arn
+        Type: AWS_PROXY
+        IntegrationHttpMethod: GET
+        Uri:
+          Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${HelloWorldLambda.Arn}/invocations
+  TestApiDevStage:
+    Type: AWS::ApiGateway::Stage
+    Properties:
+      DeploymentId:
+        Ref: TestApiDevDeployment
+      Description: Dev stage for the API
+      RestApiId:
+        Ref: TestApi
+      StageName: dev
+  TestApiDevDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn: TestApiHelloWorldGetMethod
+    Properties:
+      Description: Dev Deployment for TestApi
+      RestApiId:
+        Ref: TestApi
+  HelloWorldLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      Handler: src/app.lambda_handler
+      Runtime: python3.7
+      Description: Some Test Hello World
+      MemorySize: 128
+      Timeout: 10
+      Role: arn:aws:iam::465723548311:role/cf_test_role
+  UserTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: users
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+      ProvisionedThroughput:
+        ReadCapacityUnits: 3
+        WriteCapacityUnits: 3
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+  ApiGatewayIamRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Sid: ''
+          Effect: Allow
+          Principal:
+            Service:
+            - apigateway.amazonaws.com
+          Action:
+          - sts:AssumeRole
+      Path: /
+      Policies:
+      - PolicyName: LambdaAccess
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action: lambda:*
+            Resource:
+              Fn::GetAtt:
+              - HelloWorldLambda
+              - Arn
