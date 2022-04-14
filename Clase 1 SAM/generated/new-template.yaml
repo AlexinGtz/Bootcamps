@@ -39,7 +39,7 @@ Resources:
         Type: AWS_PROXY
         IntegrationHttpMethod: GET
         Uri:
-          Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${HelloWorldLambda.Arn}/invocations
+          Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${HelloDevAlias.Arn}/invocations
     Metadata:
       SamResourceId: TestApiHelloWorldGetMethod
   TestApiDevStage:
@@ -72,10 +72,27 @@ Resources:
       Timeout: 10
       Role: arn:aws:iam::465723548311:role/cf_test_role
       Code:
-        S3Bucket: alex-sam-dev-test
-        S3Key: bbe69291096e34aaa8e5c5b177c0a260
+        S3Bucket: sam-code-alex-dev
+        S3Key: 6af06269deacdda7eac19d196eaa190f
     Metadata:
       SamResourceId: HelloWorldLambda
+  HelloVersion1:
+    Type: AWS::Lambda::Version
+    Properties:
+      FunctionName: !Ref HelloWorldLambda
+    Metadata:
+      SamResourceId: HelloVersion1
+  HelloDevAlias:
+    Type: AWS::Lambda::Alias
+    DependsOn: HelloVersion1
+    Properties:
+      Description: Alias for the Development
+      FunctionName:
+        Ref: HelloWorldLambda
+      FunctionVersion: '1'
+      Name: DEV
+    Metadata:
+      SamResourceId: HelloDevAlias
   UserTable:
     Type: AWS::DynamoDB::Table
     Properties:

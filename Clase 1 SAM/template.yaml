@@ -61,6 +61,17 @@ Resources:
       MemorySize: 128
       Timeout: 10
       Role: arn:aws:iam::465723548311:role/cf_test_role
+  HelloVersion1:
+    Type: AWS::Lambda::Version
+    Properties:
+      FunctionName: !Ref HelloWorldLambda
+  HelloDevAlias:
+    Type: AWS::Lambda::Alias
+    Properties:
+      Description: Alias for the Development
+      FunctionName: !Ref HelloWorldLambda
+      FunctionVersion: !Ref HelloVersion1
+      Name: DEV
   UserTable:
     Type: AWS::DynamoDB::Table
     Properties:
