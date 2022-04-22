@@ -22,6 +22,7 @@ Resources:
       SamResourceId: TestApiHelloWorldResource
   TestApiHelloWorldGetMethod:
     Type: AWS::ApiGateway::Method
+    DependsOn: HelloDevAlias
     Properties:
       HttpMethod: GET
       ResourceId:
@@ -39,7 +40,7 @@ Resources:
         Type: AWS_PROXY
         IntegrationHttpMethod: GET
         Uri:
-          Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${HelloDevAlias.Arn}/invocations
+          Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${HelloDevAlias}/invocations
     Metadata:
       SamResourceId: TestApiHelloWorldGetMethod
   TestApiDevStage:
@@ -72,14 +73,16 @@ Resources:
       Timeout: 10
       Role: arn:aws:iam::465723548311:role/cf_test_role
       Code:
-        S3Bucket: sam-code-alex-dev
-        S3Key: 6af06269deacdda7eac19d196eaa190f
+        S3Bucket: sam-lambda-test-alex
+        S3Key: d5f6f97d1a3526cc35b06ca4070778a4
     Metadata:
       SamResourceId: HelloWorldLambda
   HelloVersion1:
     Type: AWS::Lambda::Version
+    DependsOn: HelloWorldLambda
     Properties:
-      FunctionName: !Ref HelloWorldLambda
+      FunctionName:
+        Ref: HelloWorldLambda
     Metadata:
       SamResourceId: HelloVersion1
   HelloDevAlias:
@@ -89,7 +92,7 @@ Resources:
       Description: Alias for the Development
       FunctionName:
         Ref: HelloWorldLambda
-      FunctionVersion: '1'
+      FunctionVersion: 1
       Name: DEV
     Metadata:
       SamResourceId: HelloDevAlias

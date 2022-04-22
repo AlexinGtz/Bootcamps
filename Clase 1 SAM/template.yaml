@@ -18,6 +18,7 @@ Resources:
       PathPart: hello
   TestApiHelloWorldGetMethod:
     Type: AWS::ApiGateway::Method
+    DependsOn: HelloDevAlias
     Properties:
       HttpMethod: GET
       ResourceId:
@@ -35,7 +36,7 @@ Resources:
         Type: AWS_PROXY
         IntegrationHttpMethod: GET
         Uri:
-          Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${HelloWorldLambda.Arn}/invocations
+          Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${HelloDevAlias}/invocations
   TestApiDevStage:
     Type: AWS::ApiGateway::Stage
     Properties:
@@ -63,14 +64,16 @@ Resources:
       Role: arn:aws:iam::465723548311:role/cf_test_role
   HelloVersion1:
     Type: AWS::Lambda::Version
+    DependsOn: HelloWorldLambda
     Properties:
       FunctionName: !Ref HelloWorldLambda
   HelloDevAlias:
     Type: AWS::Lambda::Alias
+    DependsOn: HelloVersion1
     Properties:
       Description: Alias for the Development
       FunctionName: !Ref HelloWorldLambda
-      FunctionVersion: !Ref HelloVersion1
+      FunctionVersion: 1
       Name: DEV
   UserTable:
     Type: AWS::DynamoDB::Table

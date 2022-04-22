@@ -1,5 +1,4 @@
 ### Permite crear un nuevo proyecto a base de una plantilla
-
 `sam init`
 
 ### Permite lanzar una API localmente con SAM
