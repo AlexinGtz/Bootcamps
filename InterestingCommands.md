@@ -3,11 +3,9 @@
 
 ### Permite lanzar una API localmente con SAM
 ##### (Se necesita Docker instalado)
-
 `sam local start-api --port {port}`
 
 ### Permite crear una nueva pipeline con guia
-
 `sam pipeline init --bootstrap`
 
 ### Permite hacer un paquete y subirlo a S3, para que pueda ser deployeado

@@ -13,5 +13,4 @@
 
 [12 Factors](https://12factor.net/es/)
 
-### This is for the mapping templates
-[JSON Schema Docs](https://json-schema.org/)
+[JSON Schema Docs](https://json-schema.org/) (This is for the mapping templates for API GW)
