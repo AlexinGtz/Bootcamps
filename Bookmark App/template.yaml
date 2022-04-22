@@ -1,0 +1,205 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Lab 1 - Implementacion de una Aplicacion Serverless Simple
+
+Resources:
+  BookmarkBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: True
+        BlockPublicPolicy: True
+        IgnorePublicAcls: True
+        RestrictPublicBuckets: True
+  
+  PresignupLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      Runtime: nodejs12.x
+      Role: !GetAtt RoleForPreSignUpLambda.Arn
+      Handler: index.handler
+      Timeout: 30
+      Code:
+        ZipFile: |
+          exports.handler = (event, context, callback) => {
+            // Confirm the user
+            event.response.autoConfirmUser = true;
+            // Set the email as verified if it is in the request
+            if (event.request.userAttributes.hasOwnProperty("email")) {
+              event.response.autoVerifyEmail = true;
+            }
+            // Set the phone number as verified if it is in the request
+            if (event.request.userAttributes.hasOwnProperty("phone_number")) {
+              event.response.autoVerifyPhone = true;
+            }
+            // Return to Amazon Cognito
+            callback(null, event);
+          }
+
+  LambdaDeploymentRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Action:
+              - "sts:AssumeRole"
+            Effect: "Allow"
+            Principal:
+              Service:
+                - "lambda.amazonaws.com"
+                - "states.amazonaws.com"
+      Policies:
+        - PolicyName: AWSXrayWriteOnlyAccess
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "xray:PutTraceSegments"
+                  - "xray:PutTelemetryRecords"
+                  - "xray:GetSamplingRules"
+                  - "xray:GetSamplingTargets"
+                  - "xray:GetSamplingStatisticSummaries"
+                Resource: "*"
+        - PolicyName: AWSLambdaBasicExecutionRole
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "logs:CreateLogGroup"
+                  - "logs:CreateLogStream"
+                  - "logs:PutLogEvents"
+                Resource: "*"
+        - PolicyName: AWSLambdaInvocationRole
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "lambda:InvokeFunction"
+                Resource: "*"
+        - PolicyName: BookmarkDynamoDBRolePolicy
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "dynamodb:GetItem"
+                  - "dynamodb:DeleteItem"
+                  - "dynamodb:PutItem"
+                  - "dynamodb:Scan"
+                  - "dynamodb:Query"
+                  - "dynamodb:UpdateItem"
+                  - "dynamodb:BatchWriteItem"
+                  - "dynamodb:BatchGetItem"
+                  - "dynamodb:DescribeTable"
+                  - "dynamodb:ConditionCheckItem"
+                  - "dynamodb:DescribeStream"
+                  - "dynamodb:GetRecords"
+                  - "dynamodb:GetShardIterator"
+                  - "dynamodb:ListStreams"
+                  - "events:Put*"
+                  - "events:Describe*"
+                  - "events:List*"
+                  - "sns:Publish"
+                  - "states:SendTaskSuccess"
+                Resource: "*"               
+
+  RoleForPreSignUpLambda:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Action:
+              - "sts:AssumeRole"
+            Effect: "Allow"
+            Principal:
+              Service:
+                - "lambda.amazonaws.com"
+      Policies:
+        - PolicyName: AWSLambdaBasicExecutionRole
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "logs:CreateLogGroup"
+                  - "logs:CreateLogStream"
+                  - "logs:PutLogEvents"
+                Resource: "*" 
+
+  EventBridgeLambdaRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Action:
+              - "sts:AssumeRole"
+            Effect: "Allow"
+            Principal:
+              Service:
+                - "lambda.amazonaws.com"
+      Policies:
+        - PolicyName: AWSLambdaDynamoDBExecution
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "dynamodb:DescribeStream"
+                  - "dynamodb:GetRecords"
+                  - "dynamodb:GetShardIterator"
+                  - "dynamodb:ListStreams"
+                  - "logs:CreateLogGroup"
+                  - "logs:CreateLogStream"
+                  - "logs:PutLogEvents"
+                Resource: "*"
+        - PolicyName: AmazonEventBridgeFullAccess
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "events:*"
+                Resource: "*" 
+
+  EventBridgeStateMachineRole:  
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Action:
+              - "sts:AssumeRole"
+            Effect: "Allow"
+            Principal:
+              Service:
+                - "events.amazonaws.com"
+                - "states.amazonaws.com"
+                - "lambda.amazonaws.com"
+      Policies:
+        - PolicyName: AWSLambdaInvocationRole
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "lambda:InvokeFunction"
+                Resource: "*"    
+        - PolicyName: EventBridgeStateMachinePolicy
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "states:StartExecution"
+                  - "states:SendTaskSuccess"
+                  - "sns:Publish"
+                Resource: "*"
+
+Outputs:
+  StepFunctionsDeploymentRole:
+    Value: !GetAtt  EventBridgeStateMachineRole.Arn
+    Description: Role arn used for StepFunctions in this SAM template 
+  LambdaDeploymentRole:
+    Value: !GetAtt  LambdaDeploymentRole.Arn
+    Description: Role arn used for Lambdas in this SAM template 
+    Export:
+      Name: LambdaDeploymentRole
+  EventBridgeRole:
+    Value: !GetAtt  EventBridgeStateMachineRole.Arn
+    Description: Role arn used for EventBridge in this SAM template 
