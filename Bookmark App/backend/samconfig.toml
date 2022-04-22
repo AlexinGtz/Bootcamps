@@ -1,0 +1,10 @@
+version = 0.1
+[default]
+[default.deploy]
+[default.deploy.parameters]
+stack_name = "sam-bookmark-app"
+s3_bucket = "bookmarks-sam-code-bucket"
+s3_prefix = "sam-app"
+region = "us-west-2"
+capabilities = "CAPABILITY_IAM"
+parameter_overrides = "StackName=\"\" APIGatewayStageName=\"dev\""
