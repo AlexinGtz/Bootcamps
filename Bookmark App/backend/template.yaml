@@ -590,7 +590,6 @@ Resources:
           contest: 
             - anything-but: 
                 - "Entering"              
-      EventBusName: !Ref EventBus
       Targets:
         - Arn: 
             Ref: "SNSBookmarkTopic"

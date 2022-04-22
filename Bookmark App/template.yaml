@@ -192,14 +192,8 @@ Resources:
                 Resource: "*"
 
 Outputs:
-  StepFunctionsDeploymentRole:
-    Value: !GetAtt  EventBridgeStateMachineRole.Arn
-    Description: Role arn used for StepFunctions in this SAM template 
   LambdaDeploymentRole:
     Value: !GetAtt  LambdaDeploymentRole.Arn
     Description: Role arn used for Lambdas in this SAM template 
     Export:
       Name: LambdaDeploymentRole
-  EventBridgeRole:
-    Value: !GetAtt  EventBridgeStateMachineRole.Arn
-    Description: Role arn used for EventBridge in this SAM template 
