@@ -478,8 +478,6 @@ Resources:
       AttributeDefinitions:
         - AttributeName: id
           AttributeType: S
-        - AttributeName: bookmarkUrl
-          AttributeType: S
       KeySchema:
         - AttributeName: id
           KeyType: HASH
@@ -551,6 +549,25 @@ Resources:
             - true
           contest: 
             - "Entering"
+      Targets:
+        - Arn: !GetAtt contest.Arn
+          Id: contest
+  PublishRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: publish-rule
+      Description: 'publish rule'
+      EventBusName: !Ref EventBus
+      EventPattern: 
+        source: 
+          - "DynamoDB Streams"
+        detail-type: 
+          - "Shared Bookmarks"
+        detail:
+          shared: 
+            - true
+          contest: 
+            - "Entered"
       Targets:
         - Arn: !GetAtt contest.Arn
           Id: contest 
