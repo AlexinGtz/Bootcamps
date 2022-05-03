@@ -1,0 +1,2 @@
+function-id: queueLambda
+template-path: ../../template.yaml

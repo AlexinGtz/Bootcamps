@@ -100,6 +100,9 @@ Resources:
                   - "events:List*"
                   - "sns:Publish"
                   - "states:SendTaskSuccess"
+                  - "sqs:sendMessage"
+                  - "sqs:receiveMessage"
+                  - "sqs:deleteMessage"
                 Resource: "*"               
 
   RoleForPreSignUpLambda:
@@ -190,6 +193,21 @@ Resources:
                   - "states:SendTaskSuccess"
                   - "sns:Publish"
                 Resource: "*"
+  APIGatewayCLRole: 
+    Type: AWS::IAM::Role
+    Properties: 
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action:
+              - sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service:
+                - apigateway.amazonaws.com
+        Version: "2012-10-17"
+      Path: /
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs"  
 
 Outputs:
   LambdaDeploymentRole:
@@ -197,3 +215,8 @@ Outputs:
     Description: Role arn used for Lambdas in this SAM template 
     Export:
       Name: LambdaDeploymentRole
+  SamBucket: 
+    Value: !Ref BookmarkBucket
+    Description: Bucket that holds code
+    Export: 
+      Name: SamBucket

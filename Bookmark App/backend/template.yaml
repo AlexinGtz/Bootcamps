@@ -17,6 +17,18 @@ Resources:
         swagger: '2.0'
         info: {}
         paths:
+          /queue:
+            get:
+              description : "See queue messages"
+              produces:
+                - application/json
+              responses:
+                '200':
+                  description: Successfully retrieved all bookmarks!!
+              x-amazon-apigateway-integration:
+                httpMethod: POST
+                type: aws_proxy
+                uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${QueueLambda.Arn}/invocations
           /bookmarks:
             get:
               description : "list bookmarks"
@@ -183,6 +195,48 @@ Resources:
     Metadata:
       FinTag: /bookmarks
   #LAMBDA
+  QueueLambda: 
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub ${AWS::StackName}-queueLambda
+      Description: !Sub
+          - ${ResourceName} Function
+          - ResourceName: queueLambda
+      CodeUri: src/queueLambda
+      Handler: index.handler
+      Runtime: nodejs14.x
+      Tracing: Active
+      MemorySize: 3008
+      Timeout: 30
+      Role : !ImportValue LambdaDeploymentRole
+      Policies:
+        - AWSXrayWriteOnlyAccess
+      Environment:
+        Variables:
+          QUEUE: !Ref AppQueue
+      Events:
+        apiGET:
+          Type: Api
+          Properties:
+            Path: /queue
+            Method: GET
+            RestApiId: !Ref api
+  DLQReader: 
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub ${AWS::StackName}-dlqReader
+      Description: !Sub
+          - ${ResourceName} Function
+          - ResourceName: dlqReader
+      CodeUri: src/dlqReader
+      Handler: index.handler
+      Runtime: nodejs14.x
+      Tracing: Active
+      MemorySize: 3008
+      Timeout: 30
+      Role : !ImportValue LambdaDeploymentRole
+      Policies:
+        - AWSXrayWriteOnlyAccess
   getBookmark:
     Type: AWS::Serverless::Function
     Properties:
@@ -267,6 +321,7 @@ Resources:
         Variables:
           TABLE_NAME: !Ref bookmarksTable
           TABLE_ARN: !GetAtt bookmarksTable.Arn
+          QUEUE: !Ref AppQueue
       Events:
         apiPOST:
           Type: Api
@@ -489,6 +544,7 @@ Resources:
       TableName: !Sub ${AWS::StackName}-bookmarksTable
     Metadata:
       FinTag: Bookmarks
+  #Event Source Maps
   EventSourceMapping:
     Type: AWS::Lambda::EventSourceMapping
     Properties:
@@ -503,6 +559,20 @@ Resources:
           - "Arn"
       Enabled: true
       StartingPosition: TRIM_HORIZON
+  DLQEventSourceMapping:
+    Type: AWS::Lambda::EventSourceMapping
+    Properties:
+      BatchSize: 3
+      EventSourceArn: 
+        Fn::GetAtt:
+          - "AppDLQ"
+          - "Arn"
+      FunctionName:
+        Fn::GetAtt:
+          - "DLQReader"
+          - "Arn"
+      Enabled: true
+  #SNS
   SNSBookmarkTopic:
     Type: AWS::SNS::Topic
     Properties:
@@ -511,6 +581,7 @@ Resources:
     Type: AWS::SNS::Topic
     Properties:
       TopicName: ContestTopic
+  #CW
   CloudWatchLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
@@ -623,6 +694,18 @@ Resources:
             Resource: '*'
       Topics:
         - !Ref SNSBookmarkTopic
+  AppQueue: 
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub ${AWS::StackName}-testQueue
+      RedrivePolicy: 
+        deadLetterTargetArn: !GetAtt AppDLQ.Arn
+        maxReceiveCount: 2
+  AppDLQ: 
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub ${AWS::StackName}-deadLetterQueue
+      VisibilityTimeout: 30
   PublishStateMachine:
     Type: AWS::StepFunctions::StateMachine
     Properties:
