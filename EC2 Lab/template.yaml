@@ -1,0 +1,76 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Lab 1 - Implementacion de una Aplicacion Serverless Simple
+Resources:
+  AutoScaleGroup: 
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties: 
+      AutoScalingGroupName: ${AWS::Stack}-MyASGroup
+      AvailabilityZones: 
+        - us-west-1a
+        - us-west-1b
+      DesiredCapacity: 3
+      DesiredCapacityType: units
+      HealthCheckGracePeriod: 5
+      LaunchTemplate: !Ref MainAppTemplate
+      LoadBalancerNames: 
+        - !Ref LoadBalancer
+      MaxSize: 10
+      MinSize: 2
+  LoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties: 
+      IpAddressType: ipv4
+      Name: MyLoadBalancer
+      Scheme: internet-facing
+      SecurityGroups: 
+        - !Ref SecGp1
+      Subnets:
+        - !Ref SubnetA
+        - !Ref SubnetB
+      Type: application 
+  SecGp1: 
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: MainApplication
+      GroupName: ${AWS::Stack}-SecGp1
+      SecurityGroupIngress: 
+        - CidrIp: 0.0.0.0/0
+          Description: Allow all Inbound
+          IpProtocol: TCP
+          FromPort: 1
+          ToPort: 9000
+  MainAppTemplate: 
+    Type: AWS::EC2::LaunchTemplate
+    Properties: 
+      LaunchTemplateData: 
+        ImageId: ami-0022f774911c1d690
+        InstanceType: t2.micro
+        KeyName: !Ref SSHKey
+        SecurityGroupIds: 
+          - !Ref SecGp1
+        UserData: >
+          #!/bin/bash
+          sudo su
+          yum update -y
+          yum install httpd -y
+          systemctl start httpd
+          systemctl enable httpd
+          echo "<html><h1> Welcome to AWS EC2 Web Server ${RANDOM} </h1><html>" >> /var/www/html/index.html
+      LaunchTemplateName: ${AWS::Stack}-mainAppTemplate
+  SSHKey:
+    Type: AWS::EC2::KeyPair
+    Properties: 
+      KeyName: ec2Connection
+      KeyType: rsa
+  SubnetA: 
+    Type: AWS::EC2::Subnet
+    Properties: 
+      AvailabilityZoneId: us-west-1a
+      VpcId: vpc-01dd187a93f6928bb
+      CidrBlock: 172.31.0.0/16
+  SubnetB: 
+    Type: AWS::EC2::Subnet
+    Properties: 
+      AvailabilityZoneId: us-west-1b
+      VpcId: vpc-01dd187a93f6928bb
+      CidrBlock: 172.31.0.0/16

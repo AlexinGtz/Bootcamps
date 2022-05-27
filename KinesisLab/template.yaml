@@ -1,0 +1,171 @@
+AWSTemplateFormatVersion: 2010-09-09
+Transform: AWS::Serverless-2016-10-31
+Description: Main Stack for Library Application
+Resources: 
+  KinesisAPI:
+    Type: AWS::Serverless::Api
+    Properties: 
+      Description: API to handle kinesis streams
+      Name: KinesisAPI
+      StageName: dev
+      Cors:
+        AllowMethods: "'*'"
+        AllowHeaders: "'*'"
+        AllowOrigin: "'*'"
+      EndpointConfiguration: REGIONAL
+  #LAMBDA
+  PutRecordsLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/putRecords
+      Handler: index.handler
+      Runtime: nodejs14.x
+      Role: !GetAtt  LambdaDeploymentRole.Arn
+      Environment: 
+        Variables:
+          KINESIS_STREAM_NAME: !Ref KinesisStream
+      Events:
+        CreateData:
+          Type: Api
+          Properties:
+            Path: /putRecords
+            Method: get
+            RestApiId: !Ref KinesisAPI
+  ProcessRecordsLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/processRecords
+      Handler: index.handler
+      Runtime: nodejs14.x 
+      Role: !GetAtt  LambdaDeploymentRole.Arn
+  FilterRecordsLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/filterRecords
+      Handler: index.handler
+      Runtime: nodejs14.x
+      Role: !GetAtt  LambdaDeploymentRole.Arn
+  KinesisEvent:
+    Type: AWS::Lambda::EventSourceMapping
+    Properties:
+      BatchSize: 10
+      EventSourceArn: !GetAtt KinesisStream.Arn
+      FunctionName: !GetAtt ProcessRecordsLambda.Arn
+      Enabled: true
+      StartingPosition: LATEST
+  #KINESIS
+  KinesisStream:
+    Type: AWS::Kinesis::Stream
+    Properties:
+      Name: !Sub ${AWS::StackName}-dataKinesis
+      RetentionPeriodHours: 24
+      ShardCount: 1
+  FirehoseStream:
+    Type: AWS::KinesisFirehose::DeliveryStream
+    Properties:
+      DeliveryStreamName: !Sub ${AWS::StackName}-firehose-stream
+      DeliveryStreamType: KinesisStreamAsSource
+      KinesisStreamSourceConfiguration:
+        KinesisStreamARN: !GetAtt KinesisStream.Arn
+        RoleARN: !GetAtt FirehoseRole.Arn
+      ExtendedS3DestinationConfiguration:
+        BucketARN: !GetAtt FirehoseBucket.Arn
+        BufferingHints:
+          IntervalInSeconds: 60
+          SizeInMBs: 1
+        CloudWatchLoggingOptions:
+          Enabled: true
+          LogGroupName: !Sub ${AWS::StackName}-FirehoseGP
+          LogStreamName: !Sub ${AWS::StackName}-FirehoseStr
+        ErrorOutputPrefix: error/
+        RoleARN: !GetAtt FirehoseRole.Arn
+        ProcessingConfiguration:
+          Enabled: true
+          Processors:
+            - Type: Lambda
+              Parameters:
+                - ParameterName: LambdaArn
+                  ParameterValue: !GetAtt FilterRecordsLambda.Arn
+                - ParameterName: RoleArn
+                  ParameterValue: !GetAtt FirehoseRole.Arn
+                - ParameterName: BufferSizeInMBs
+                  ParameterValue: 1
+                - ParameterName: BufferIntervalInSeconds
+                  ParameterValue: 60
+  #S3
+  FirehoseBucket:
+    Type: AWS::S3::Bucket
+  #IAM
+  LambdaDeploymentRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Action:
+              - "sts:AssumeRole"
+            Effect: "Allow"
+            Principal:
+              Service:
+                - "lambda.amazonaws.com"
+      Policies:
+        - PolicyName: AWSLambdaBasicExecutionRole
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "logs:CreateLogGroup"
+                  - "logs:CreateLogStream"
+                  - "logs:PutLogEvents"
+                Resource: "*"
+        - PolicyName: BookmarkDynamoDBRolePolicy
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "kinesis:GetRecords"
+                  - "kinesis:GetShardIterator"
+                  - "kinesis:DescribeStream"
+                  - "kinesis:ListShards"
+                  - "kinesis:ListStreams"
+                  - "kinesis:PutRecord"
+                  - "kinesis:PutRecords"
+                Resource: "*" 
+  FirehoseRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Action:
+              - "sts:AssumeRole"
+            Effect: "Allow"
+            Principal:
+              Service:
+                - "firehose.amazonaws.com"
+      Policies:
+        - PolicyName: AWSLambdaBasicExecutionRole
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "logs:CreateLogGroup"
+                  - "logs:CreateLogStream"
+                  - "logs:PutLogEvents"
+                Resource: "*"
+        - PolicyName: BookmarkDynamoDBRolePolicy
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "s3:PutObject"
+                  - "kinesis:GetRecords"
+                  - "kinesis:GetShardIterator"
+                  - "kinesis:DescribeStream"
+                  - "kinesis:ListShards"
+                  - "kinesis:ListStreams"
+                  - "kinesis:PutRecord"
+                  - "kinesis:PutRecords"
+                  - "lambda:invokeFunction"
+                Resource: "*" 
+  

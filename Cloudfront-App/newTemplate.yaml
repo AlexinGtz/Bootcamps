@@ -1,0 +1,179 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Creation of an application hosted in cloudfront
+Resources:
+  WebPageBucket:
+    Type: AWS::S3::Bucket
+    Metadata:
+      SamResourceId: WebPageBucket
+  MainDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        DefaultCacheBehavior:
+          CachePolicyId:
+            Ref: MainCachePolicy
+          TargetOriginId:
+            Ref: WebPageBucket
+          AllowedMethods:
+          - GET
+          - POST
+          - OPTIONS
+          - HEAD
+          - DELETE
+          - PUT
+          - PATCH
+          ViewerProtocolPolicy: allow-all
+        HttpVersion: http2
+        Enabled: true
+        PriceClass: PriceClass_100
+        DefaultRootObject: index.html
+        Origins:
+        - S3OriginConfig:
+            OriginAccessIdentity:
+              Fn::Sub: origin-access-identity/cloudfront/${MainOAI}
+          Id:
+            Ref: WebPageBucket
+          DomainName:
+            Fn::GetAtt:
+            - WebPageBucket
+            - DomainName
+    Metadata:
+      SamResourceId: MainDistribution
+  MainOAI:
+    Type: AWS::CloudFront::CloudFrontOriginAccessIdentity
+    Properties:
+      CloudFrontOriginAccessIdentityConfig:
+        Comment: OAI for WebPageBucket
+    Metadata:
+      SamResourceId: MainOAI
+  MainCachePolicy:
+    Type: AWS::CloudFront::CachePolicy
+    Properties:
+      CachePolicyConfig:
+        Comment: Main Cache
+        DefaultTTL: 6000
+        MaxTTL: 10000
+        MinTTL: 2000
+        Name: MainCahce
+        ParametersInCacheKeyAndForwardedToOrigin:
+          CookiesConfig:
+            CookieBehavior: all
+          HeadersConfig:
+            HeaderBehavior: none
+          QueryStringsConfig:
+            QueryStringBehavior: all
+          EnableAcceptEncodingGzip: false
+    Metadata:
+      SamResourceId: MainCachePolicy
+  api:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name: CloudfrontAPI
+      StageName: dev
+      Cors:
+        AllowMethods: '''*'''
+        AllowHeaders: '''*'''
+        AllowOrigin: '''*'''
+    Metadata:
+      SamResourceId: api
+  getOrders:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: ${AWS::StackName}-getOrders
+      Description:
+        Fn::Sub:
+        - ${ResourceName} Function
+        - ResourceName: getOrders
+      CodeUri: s3://my-web-app-alex-2002/ac970079c706d9dbc7c205541eb9ab20
+      Handler: index.handler
+      Runtime: nodejs14.x
+      Tracing: Active
+      MemorySize: 3008
+      Timeout: 30
+      Role:
+        Fn::GetAtt:
+        - LambdaDeploymentRole
+        - Arn
+      Events:
+        apiGET:
+          Type: Api
+          Properties:
+            Path: /getOrders
+            Method: GET
+            RestApiId:
+              Ref: api
+    Metadata:
+      SamResourceId: getOrders
+  LambdaDeploymentRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Action:
+          - sts:AssumeRole
+          Effect: Allow
+          Principal:
+            Service:
+            - lambda.amazonaws.com
+            - states.amazonaws.com
+      Policies:
+      - PolicyName: AWSXrayWriteOnlyAccess
+        PolicyDocument:
+          Statement:
+          - Effect: Allow
+            Action:
+            - xray:PutTraceSegments
+            - xray:PutTelemetryRecords
+            - xray:GetSamplingRules
+            - xray:GetSamplingTargets
+            - xray:GetSamplingStatisticSummaries
+            Resource: '*'
+      - PolicyName: AWSLambdaBasicExecutionRole
+        PolicyDocument:
+          Statement:
+          - Effect: Allow
+            Action:
+            - logs:CreateLogGroup
+            - logs:CreateLogStream
+            - logs:PutLogEvents
+            Resource: '*'
+      - PolicyName: AWSLambdaInvocationRole
+        PolicyDocument:
+          Statement:
+          - Effect: Allow
+            Action:
+            - lambda:InvokeFunction
+            Resource: '*'
+      - PolicyName: BookmarkDynamoDBRolePolicy
+        PolicyDocument:
+          Statement:
+          - Effect: Allow
+            Action:
+            - dynamodb:GetItem
+            - dynamodb:DeleteItem
+            - dynamodb:PutItem
+            - dynamodb:Scan
+            - dynamodb:Query
+            - dynamodb:UpdateItem
+            - dynamodb:BatchWriteItem
+            - dynamodb:BatchGetItem
+            - dynamodb:DescribeTable
+            - dynamodb:ConditionCheckItem
+            - dynamodb:DescribeStream
+            - dynamodb:GetRecords
+            - dynamodb:GetShardIterator
+            - dynamodb:ListStreams
+            - events:Put*
+            - events:Describe*
+            - events:List*
+            - sns:Publish
+            - states:SendTaskSuccess
+            - sqs:sendMessage
+            - sqs:receiveMessage
+            - sqs:deleteMessage
+            Resource: '*'
+    Metadata:
+      SamResourceId: LambdaDeploymentRole

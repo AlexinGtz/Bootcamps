@@ -1,0 +1,225 @@
+AWSTemplateFormatVersion: 2010-09-09
+Transform: AWS::Serverless-2016-10-31
+Description: Main Stack for Library Application
+Resources:
+  KinesisAPI:
+    Type: AWS::Serverless::Api
+    Properties:
+      Description: API to handle kinesis streams
+      Name: KinesisAPI
+      StageName: dev
+      Cors:
+        AllowMethods: '''*'''
+        AllowHeaders: '''*'''
+        AllowOrigin: '''*'''
+      EndpointConfiguration: REGIONAL
+    Metadata:
+      SamResourceId: KinesisAPI
+  PutRecordsLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: s3://kinesis-alex-code/5aa79d05bd3a55352a71306b593c1bba
+      Handler: index.handler
+      Runtime: nodejs14.x
+      Role:
+        Fn::GetAtt:
+        - LambdaDeploymentRole
+        - Arn
+      Environment:
+        Variables:
+          KINESIS_STREAM_NAME:
+            Ref: KinesisStream
+      Events:
+        CreateData:
+          Type: Api
+          Properties:
+            Path: /putRecords
+            Method: get
+            RestApiId:
+              Ref: KinesisAPI
+    Metadata:
+      SamResourceId: PutRecordsLambda
+  ProcessRecordsLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: s3://kinesis-alex-code/9f487485d26f4bc37ec08a65b0aa3e91
+      Handler: index.handler
+      Runtime: nodejs14.x
+      Role:
+        Fn::GetAtt:
+        - LambdaDeploymentRole
+        - Arn
+    Metadata:
+      SamResourceId: ProcessRecordsLambda
+  FilterRecordsLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: s3://kinesis-alex-code/485c0d28627f85fd9f5cadbc0ef08b46
+      Handler: index.handler
+      Runtime: nodejs14.x
+      Role:
+        Fn::GetAtt:
+        - LambdaDeploymentRole
+        - Arn
+    Metadata:
+      SamResourceId: FilterRecordsLambda
+  KinesisEvent:
+    Type: AWS::Lambda::EventSourceMapping
+    Properties:
+      BatchSize: 10
+      EventSourceArn:
+        Fn::GetAtt:
+        - KinesisStream
+        - Arn
+      FunctionName:
+        Fn::GetAtt:
+        - ProcessRecordsLambda
+        - Arn
+      Enabled: true
+      StartingPosition: LATEST
+    Metadata:
+      SamResourceId: KinesisEvent
+  KinesisStream:
+    Type: AWS::Kinesis::Stream
+    Properties:
+      Name:
+        Fn::Sub: ${AWS::StackName}-dataKinesis
+      RetentionPeriodHours: 24
+      ShardCount: 1
+    Metadata:
+      SamResourceId: KinesisStream
+  FirehoseStream:
+    Type: AWS::KinesisFirehose::DeliveryStream
+    Properties:
+      DeliveryStreamName:
+        Fn::Sub: ${AWS::StackName}-firehose-stream
+      DeliveryStreamType: KinesisStreamAsSource
+      KinesisStreamSourceConfiguration:
+        KinesisStreamARN:
+          Fn::GetAtt:
+          - KinesisStream
+          - Arn
+        RoleARN:
+          Fn::GetAtt:
+          - FirehoseRole
+          - Arn
+      ExtendedS3DestinationConfiguration:
+        BucketARN:
+          Fn::GetAtt:
+          - FirehoseBucket
+          - Arn
+        BufferingHints:
+          IntervalInSeconds: 60
+          SizeInMBs: 1
+        CloudWatchLoggingOptions:
+          Enabled: true
+          LogGroupName:
+            Fn::Sub: ${AWS::StackName}-FirehoseGP
+          LogStreamName:
+            Fn::Sub: ${AWS::StackName}-FirehoseStr
+        ErrorOutputPrefix: error/
+        RoleARN:
+          Fn::GetAtt:
+          - FirehoseRole
+          - Arn
+        ProcessingConfiguration:
+          Enabled: true
+          Processors:
+          - Type: Lambda
+            Parameters:
+            - ParameterName: LambdaArn
+              ParameterValue:
+                Fn::GetAtt:
+                - FilterRecordsLambda
+                - Arn
+            - ParameterName: RoleArn
+              ParameterValue:
+                Fn::GetAtt:
+                - FirehoseRole
+                - Arn
+            - ParameterName: BufferSizeInMBs
+              ParameterValue: 1
+            - ParameterName: BufferIntervalInSeconds
+              ParameterValue: 60
+    Metadata:
+      SamResourceId: FirehoseStream
+  FirehoseBucket:
+    Type: AWS::S3::Bucket
+    Metadata:
+      SamResourceId: FirehoseBucket
+  LambdaDeploymentRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Action:
+          - sts:AssumeRole
+          Effect: Allow
+          Principal:
+            Service:
+            - lambda.amazonaws.com
+      Policies:
+      - PolicyName: AWSLambdaBasicExecutionRole
+        PolicyDocument:
+          Statement:
+          - Effect: Allow
+            Action:
+            - logs:CreateLogGroup
+            - logs:CreateLogStream
+            - logs:PutLogEvents
+            Resource: '*'
+      - PolicyName: BookmarkDynamoDBRolePolicy
+        PolicyDocument:
+          Statement:
+          - Effect: Allow
+            Action:
+            - kinesis:GetRecords
+            - kinesis:GetShardIterator
+            - kinesis:DescribeStream
+            - kinesis:ListShards
+            - kinesis:ListStreams
+            - kinesis:PutRecord
+            - kinesis:PutRecords
+            Resource: '*'
+    Metadata:
+      SamResourceId: LambdaDeploymentRole
+  FirehoseRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Action:
+          - sts:AssumeRole
+          Effect: Allow
+          Principal:
+            Service:
+            - firehose.amazonaws.com
+      Policies:
+      - PolicyName: AWSLambdaBasicExecutionRole
+        PolicyDocument:
+          Statement:
+          - Effect: Allow
+            Action:
+            - logs:CreateLogGroup
+            - logs:CreateLogStream
+            - logs:PutLogEvents
+            Resource: '*'
+      - PolicyName: BookmarkDynamoDBRolePolicy
+        PolicyDocument:
+          Statement:
+          - Effect: Allow
+            Action:
+            - s3:PutObject
+            - kinesis:GetRecords
+            - kinesis:GetShardIterator
+            - kinesis:DescribeStream
+            - kinesis:ListShards
+            - kinesis:ListStreams
+            - kinesis:PutRecord
+            - kinesis:PutRecords
+            - lambda:invokeFunction
+            Resource: '*'
+    Metadata:
+      SamResourceId: FirehoseRole
